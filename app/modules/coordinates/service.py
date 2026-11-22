@@ -8,7 +8,9 @@ def convert(intake):
     catalog = intake['catalog']
     sheets = {sheet['code']: sheet for sheet in catalog['sheets']}
     origin = (catalog['longitude_deg'], catalog['latitude_deg'])
-    values = {'pixels': [], 'ground': [], 'quarantine': [], 'counts': {}}
+    values = {'pixels': [], 'ground': [], 'quarantine': [], 'counts': {},
+              'gaps': {filename: intake['tables'][filename]['gaps']
+                       for filename in ('pixels.csv', 'ground.csv')}}
     for kind in ('pixels', 'ground'):
         filename = f'{kind}.csv'
         table = intake['tables'][filename]

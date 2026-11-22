@@ -1,11 +1,12 @@
 from collections import defaultdict
 
 
-def decisions(catalog, refit, seams):
+def decisions(catalog, refit, seams, gap_sheets=()):
     incident = defaultdict(list)
     for edge in seams['edges']:
         incident[edge['a']].append(edge)
         incident[edge['b']].append(edge)
+    held = set(gap_sheets)
     reviews = []
     for sheet in catalog['sheets']:
         code = sheet['code']
@@ -14,6 +15,8 @@ def decisions(catalog, refit, seams):
         blocked = [edge['code'] for edge in edges if edge['status'] == 'BLOCKED']
         if model['status'] != 'FIT':
             status, reason = 'HOLD', model['reason']
+        elif code in held:
+            status, reason = 'HOLD', 'GAP_UNRESOLVED'
         elif failed:
             status, reason = 'RETURN', 'GAP_OVER_LIMIT'
         elif blocked:

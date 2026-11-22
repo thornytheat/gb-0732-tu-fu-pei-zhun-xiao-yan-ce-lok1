@@ -135,7 +135,9 @@ function showSnapshot(snapshot) {
   byId('batch-id').textContent = manifest.run_id.slice(0, 12);
   byId('batch-id').title = manifest.run_id;
   byId('generated').textContent = `${formatTime.format(new Date(manifest.created_at))} · UTC+08:00 · ${manifest.rule_version}`;
-  byId('run-state').textContent = state.reused ? '已复用同一批次 · 三表对账通过' : '校验完成 · 三表对账通过';
+  const fragments = Object.values(snapshot.intake).reduce((count, table) => count + (table.gaps?.length || 0), 0);
+  byId('run-state').textContent = (state.reused ? '已复用同一批次 · 三表对账通过' : '校验完成 · 三表对账通过') +
+    (fragments ? ` · 残卷 ${fragments} 段待补` : '');
   const download = byId('download');
   download.href = `/api/review/runs/${manifest.run_id}/export`;
   download.removeAttribute('aria-disabled');

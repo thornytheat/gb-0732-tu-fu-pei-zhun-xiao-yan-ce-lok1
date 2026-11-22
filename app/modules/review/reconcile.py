@@ -13,7 +13,10 @@ def ledger(table, partitions):
     if expected != actual or table['records'] != sum(expected.values()):
         raise RegisterError('LEDGER_MISMATCH', '档件行号对账失败', 500, table['file'])
     return {'input': table['records'], **{name: len(rows) for name, rows in partitions.items()},
-            'blank': table['blank'], 'repeated_headers': table['headers'], 'balanced': True}
+            'blank': table['blank'], 'repeated_headers': table['headers'], 'state': table['state'],
+            'missing': [{'start': gap['start_line'], 'end': gap['end_line']}
+                        for gap in table.get('gaps', [])],
+            'balanced': True}
 
 
 def reconcile(intake, pairing, refit, seams):

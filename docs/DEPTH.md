@@ -7,7 +7,7 @@
 
 | 模块 | 使用者动作 | 入口 | 核心文件 | 测试 |
 |---|---|---|---|---|
-| M1 点表收件 | 探查表头、格式与原件结构 | `GET /api/intake` | `app/modules/intake/reader.py` `app/modules/intake/catalog.py` | `tests/test_intake.py` |
+| M1 点表收件 | 探查表头、格式与原件结构，残卷登记缺段与交件凭据 | `GET /api/intake` | `app/modules/intake/reader.py` `app/modules/intake/gaps.py` `app/modules/intake/catalog.py` | `tests/test_intake.py` `tests/test_fragments.py` |
 | M2 坐标换算 | 核对度、米、厘米与像素坐标 | `GET /api/coordinates` | `app/modules/coordinates/projection.py` `app/modules/coordinates/service.py` | `tests/test_coordinates.py` |
 | M3 控制点配对 | 提取同名或同别名点的两侧证据 | `GET /api/pairing` | `app/modules/pairing/aliases.py` `app/modules/pairing/duplicates.py` | `tests/test_pairing.py` |
 | M4 仿射拟合 | 求模型与初算误差 | `GET /api/affine` | `app/modules/affine/solve.py` `app/modules/affine/residuals.py` | `tests/test_affine.py` |
@@ -29,7 +29,7 @@
 | TRAP-08 | `sample_data/field/pixels.csv` 的 `0421` | 前导零丢失 | 图幅字符串做业务键 | `app/modules/pairing/service.py` | `tests/test_pairing.py::test_sheet_codes_keep_their_leading_zero` |
 | TRAP-14 | `sample_data/field/ground.csv` 与 `pixels.csv` 有同名冲突重测 | 末行覆盖前值 | 全组隔离并保留冲突行 | `app/modules/pairing/duplicates.py` | `tests/test_pairing.py::test_ground_and_pixel_conflicts_do_not_use_last_write` |
 | TRAP-15 | `sample_data/field/ground.csv` 含经纬度、厘米和错误后缀 | 混合度米直接拟合 | 转 ENU 及处理单位冲突 | `app/modules/coordinates/projection.py` | `tests/test_coordinates.py::test_centimeters_and_geographic_degrees_match_reference` `tests/test_coordinates.py::test_degree_meter_conflicts_and_mismatched_suffix_are_isolated` |
-| TRAP-16 | 在 `sample_data/field/witness.csv` 的测试副本续入半截引号 | 部分提交 | 结构错误拒收且事务无半批 | `app/modules/intake/reader.py` | `tests/test_intake.py::test_open_quote_after_valid_records_rejects_whole_table` |
+| TRAP-16 | 在 `sample_data/field/witness.csv` 的测试副本续入半截引号 | 整表拒收耽误完好图幅，或静默截尾漏行 | 断段登记缺段、完好记录照收；表头损坏才整档拒收 | `app/modules/intake/reader.py` | `tests/test_intake.py::test_open_quote_after_valid_records_becomes_a_fragment` `tests/test_intake.py::test_open_quote_before_the_header_still_rejects_whole_table` |
 | TRAP-18 | `sample_data/field/pixels.csv` 的测试副本分别留空、空行和表头 | 都当成功空批 | 独立收件状态 | `app/modules/intake/reader.py` | `tests/test_intake.py::test_empty_blank_and_header_only_are_distinct` |
 | TRAP-19 | 测试内两组同规模像素仿射共享四点 | 按遍历次序裁决 | 同等多数阻断 | `app/modules/refit/consensus.py` | `tests/test_refit.py::test_same_size_alternate_models_return_ambiguity_instead_of_arbitrary_choice` |
 | TRAP-20 | 测试内两条别名互相指向 | 无限追溯 | 检测别名环并给出路径 | `app/modules/pairing/aliases.py` | `tests/test_pairing.py::test_alias_loop_and_normalized_collision_are_explicit` |
@@ -39,6 +39,9 @@
 | TRAP-28 | `sample_data/field/ground.csv` 的河西 P08 偏离 | 初算剔除误伤多点 | 稳定多数重估恢复良点 | `app/modules/refit/consensus.py` | `tests/test_refit.py::test_refit_recovers_good_points_that_initial_fit_would_drop` |
 | TRAP-29 | `sample_data/field/witness.csv` 的 `HX-QS` | 小训练残差冒充拼缝通过 | 两侧独立投影后取最大平面差 | `app/modules/seams/geometry.py` | `tests/test_seams.py::test_independent_edge_fails_even_when_both_training_residuals_are_small` |
 | TRAP-30 | `sample_data/field/witness.csv` 测试副本用旧控制点名冒充见证 | 重复证据进入独立核验 | 用规范名和像素索引排除 | `app/modules/seams/witnesses.py` | `tests/test_seams.py::test_pseudo_witness_reusing_a_control_alias_is_excluded` |
+| TRAP-31 | 测试副本残段藏着已收点名的同名观测 | 照常配准误签 | 命中线索的已收观测按 `GAP_HIDDEN_REPEAT` 隔离 | `app/modules/pairing/service.py` | `tests/test_fragments.py::test_hidden_same_name_observation_knocks_out_the_received_point` |
+| TRAP-32 | 测试副本缺段波及某图幅，邻缝与邻幅连带 | 缺段图幅照常签审 | 缺段影响未排除暂缓签审，受堵拼缝记 `EDGE_GAP` | `app/modules/review/decisions.py` `app/modules/seams/service.py` | `tests/test_fragments.py::test_gap_impact_holds_an_otherwise_ready_sheet` `tests/test_fragments.py::test_witness_gap_blocks_the_edge_and_its_sheets` |
+| TRAP-33 | 同一残卷重跑、补件失败 | 批次膨胀或上次结论丢失 | 收件批次按内容键复用，失败不落批，可按批次号找回 | `app/modules/intake/service.py` `app/store.py` | `tests/test_fragments.py::test_same_fragment_rerun_does_not_add_an_intake_batch` `tests/test_fragments.py::test_failed_supplement_keeps_the_previous_intake_conclusion` |
 
 ## 对账
 
@@ -48,4 +51,4 @@
 | 49 条地面坐标记录 | 43 配对 + 6 隔离 |
 | 19 条拼缝见证记录 | 18 可用 + 1 隔离 |
 
-空行和重复表头各一行，未纳入逻辑记录。对账比较源行号多重集，同计数但错行也会阻断。签审沿所有登记拼缝求判定，`HX-QS` 实测超限与 `QS-SJ` 缺模型分别留证。
+空行和重复表头各一行，未纳入逻辑记录。对账比较源行号多重集，同计数但错行也会阻断。残卷的缺段物理行单列 `missing` 区间，不参与去向计数。签审沿所有登记拼缝求判定，`HX-QS` 实测超限与 `QS-SJ` 缺模型分别留证。

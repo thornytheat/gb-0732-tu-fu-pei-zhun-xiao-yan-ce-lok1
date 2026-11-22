@@ -18,7 +18,8 @@ from conftest import by_key
 def test_conservation_covers_every_control_ground_and_witness_row(field):
     result = reconcile(field.intake, field.pairing, field.refit, field.seams)
     assert result['controls'] == {'input': 53, 'accepted': 35, 'outlier': 1, 'isolated': 17,
-                                  'blank': 1, 'repeated_headers': 1, 'balanced': True}
+                                  'blank': 1, 'repeated_headers': 1, 'state': 'RECEIVED',
+                                  'missing': [], 'balanced': True}
     assert (result['ground']['paired'], result['ground']['isolated']) == (43, 6)
     assert (result['witnesses']['eligible'], result['witnesses']['isolated']) == (18, 1)
     assert sum(result['reason_counts'].values()) == 24
@@ -62,7 +63,7 @@ def test_source_error_leaves_no_partial_batch_and_retry_succeeds(settings, tmp_p
     settings.sample_root = test_sources
     file = test_sources / 'field' / 'witness.csv'
     good = file.read_bytes()
-    file.write_bytes(good + b'"unterminated')
+    file.write_bytes(b'"' + good)
     store = Store(settings.database)
     store.initialize()
     with pytest.raises(RegisterError, match='引号未闭合'):

@@ -48,6 +48,7 @@ canvas { display: block; max-width: 100%; width: 100%; }
 .detail-content { min-width: 0; }
 .detail-content h3 { padding: 9px var(--pad) 4px; }
 .detail-content > p { padding: 10px var(--pad); }
+.impact-note { margin: 6px var(--pad) 0; border-left: 3px solid var(--warn); background: var(--panel-2); font-size: 12px; }
 .table-wrap { max-height: 390px; overflow: auto; }
 .ledger { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
 .ledger th, .ledger td { padding: 5px 10px; height: var(--row); min-width: 68px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }

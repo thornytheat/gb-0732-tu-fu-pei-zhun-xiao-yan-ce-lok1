@@ -45,12 +45,19 @@ def test_empty_blank_and_header_only_are_distinct(field):  # TRAP-18
     assert states == ['EMPTY_FILE', 'BLANK_FILE', 'HEADER_ONLY']
 
 
-def test_open_quote_after_valid_records_rejects_whole_table(field):  # TRAP-16
+def test_open_quote_after_valid_records_becomes_a_fragment(field):  # TRAP-16
     text = field.bundle['witness.csv'].decode()
+    table = read_rows(text + 'HX-QS,"unfinished', 'witness.csv', 'utf-8')
+    assert table['state'] == 'FRAGMENT' and table['records'] == 19
+    gap, = table['gaps']
+    assert (gap['start_line'], gap['end_line']) == (21, 21)
+    assert gap['raw'] == ['HX-QS,"unfinished']
+
+
+def test_open_quote_before_the_header_still_rejects_whole_table(field):  # TRAP-16
     with pytest.raises(RegisterError) as caught:
-        read_rows(text + 'HX-QS,"unfinished', 'witness.csv', 'utf-8')
+        read_rows('"' + field.bundle['witness.csv'].decode(), 'witness.csv', 'utf-8')
     assert caught.value.code == 'MALFORMED_CSV'
-    assert caught.value.evidence == {'file': 'witness.csv', 'line': 21}
 
 
 def test_english_columns_may_be_reordered(field):  # TRAP-17

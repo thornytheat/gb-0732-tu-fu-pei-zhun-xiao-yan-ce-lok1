@@ -30,7 +30,7 @@ Compose 将批次与签审保存到 `register-data` 命名卷。需要空册时�
 
 | 章节 | 入口 | 校验动作 |
 |---|---|---|
-| 点表收件 | `GET /api/intake` | 解码、识别空档和分段表头、保留物理行范围 |
+| 点表收件 | `GET /api/intake` | 解码、识别空档和分段表头、保留物理行范围，残卷登记缺段与分幅交件凭据 |
 | 坐标换算 | `GET /api/coordinates` | WGS84 与本地米／厘米换成 ENU 平面米 |
 | 控制点配对 | `GET /api/pairing` | 点名归并、重测冲突隔离、像素与地面对表 |
 | 仿射拟合 | `GET /api/affine` | 仿射最小二乘、秩检查、逐点初始残差 |
@@ -39,6 +39,8 @@ Compose 将批次与签审保存到 `register-data` 命名卷。需要空册时�
 | 图幅签审 | `POST /api/review/runs` | 原件勾稽、图边签审判定、批次留存 |
 
 预检入口接收 `dataset=field` 或 `dataset=reference`，以及可选的 `control_limit_m`、`seam_limit_m`。运行接口接收同名 JSON 字段。`GET /api/review/runs/{run_id}` 回读，`POST /api/review/runs/{run_id}/signatures` 对可签图幅录名，`GET /api/review/runs/{run_id}/export` 下载一份证据。接口目录在 `/docs`。
+
+点表引号断裂时按残卷收件：断段物理行登记为缺段，完好记录照收，册页注明哪些图幅还能校验；缺段影响未排除的图幅暂不签审，受堵拼缝保留实测偏差但不得通过。每次收件按内容生成批次，同一残卷重跑不新增批次；`GET /api/intake/batches?dataset=` 列出收件批次，`GET /api/intake/batches/{intake_id}` 回读某次收件结论，补件失败后可据此恢复。
 
 默认原件包含一个高影响离群点、冲突重测及一幅共线退化图。河西和青石桥均可拟合，但两图之间的见证偏差超限；柳湾可以签审。校准副本的 48 个控制点采信、三条边通过，四幅均可签。
 

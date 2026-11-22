@@ -2,7 +2,7 @@ import {drawResidual} from './plots.js';
 
 export const labels = {
   PASS: '通过', FAIL: '超限', BLOCKED: '待核', FIT: '已拟合', READY: '可签', HOLD: '暂缓', RETURN: '退修',
-  SIGNED: '已签', OUTLIER: '离群', ACCEPTED: '采信', RECEIVED: '已收',
+  SIGNED: '已签', OUTLIER: '离群', ACCEPTED: '采信', RECEIVED: '已收', FRAGMENT: '残卷',
   EMPTY_FILE: '空档', BLANK_FILE: '空行档', HEADER_ONLY: '仅表头',
 };
 const reasons = JSON.parse(document.getElementById('reason-dictionary').textContent);
@@ -58,11 +58,31 @@ function group(root, title, content) {
   root.append(el('h3', title), content);
 }
 
-function intake(root, tables) {
+function intake(root, data) {
+  const tables = data.tables;
   const files = Object.values(tables);
-  root.append(table([['原件'], ['编码'], ['状态'], ['逻辑记录', 'num'], ['空行', 'num'], ['重复表头', 'num']], files.map(file => [
-    file.file, file.encoding, badge(file.state), file.records, file.blank, file.headers,
-  ])));
+  root.append(table([['原件'], ['编码'], ['状态'], ['逻辑记录', 'num'], ['空行', 'num'], ['重复表头', 'num'], ['缺段', 'num']],
+    files.map(file => [file.file, file.encoding, badge(file.state), file.records, file.blank, file.headers,
+      (file.gaps || []).length])));
+  const impact = data.impact;
+  if (impact && (impact.held.length || impact.edges.length)) {
+    const note = el('p', null, 'impact-note');
+    note.textContent = `缺段影响未排除：${impact.held.join('、') || '无'}（暂不签审）；` +
+      `仍可校验：${impact.clear.join('、') || '无'}；受堵拼缝：${impact.edges.join('、') || '无'}。`;
+    root.append(note);
+  }
+  const gaps = files.flatMap(file => (file.gaps || []).map(gap => ({file: file.file, ...gap})));
+  if (gaps.length) {
+    group(root, '缺段范围', table([['原件'], ['缺段行'], ['涉及图幅 / 拼缝'], ['残段原文', 'raw']], gaps.map(gap => [
+      gap.file, `#${gap.start_line}–${gap.end_line}`,
+      (gap.sheets || gap.edges || []).join('、') || '未识别', gap.raw.join(' ⏎ '),
+    ])));
+  }
+  if (data.receipts) {
+    const rows = Object.entries(data.receipts).flatMap(([file, perKey]) =>
+      Object.entries(perKey).map(([code, ids]) => [code, file, ids.length, ids.join('，')]));
+    group(root, '分幅交件凭据', table([['图幅 / 拼缝'], ['原件'], ['收到记录', 'num'], ['源行凭据', 'raw']], rows));
+  }
   group(root, '原始记录', table([['来源'], ['原始字段', 'raw']], files.flatMap(file => file.rows.map(row => [
     evidence(row.source), row.source.raw.join(' | '),
   ]))));
@@ -158,7 +178,7 @@ export function renderLedger(root, section, {snapshot, preview, selected, edgeId
     return;
   }
   const renderers = {intake, coordinates, pairing, affine, refit, seams, review};
-  if (section === 'intake') intake(root, preview ? value.tables : value);
+  if (section === 'intake') intake(root, preview ? value : {tables: value, receipts: snapshot?.receipts, impact: snapshot?.impact});
   else if (section === 'affine') affine(root, preview ? value.sheets : value, snapshot?.pairing.pairs || []);
   else if (section === 'refit') refit(root, value, selected, limit);
   else if (section === 'seams') seams(root, value, edgeId);

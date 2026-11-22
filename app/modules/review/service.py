@@ -15,10 +15,11 @@ def run_review(settings, store, options):
     if existing is not None:
         return existing, True
     ledger = reconcile(survey.intake, survey.pairing, survey.refit, survey.seams)
-    reviews = decisions(survey.catalog, survey.refit, survey.seams)
+    reviews = decisions(survey.catalog, survey.refit, survey.seams, survey.pairing['gap_sheets'])
     manifest['processing_ms'] = round((perf_counter() - started) * 1000, 3)
     return store.insert({'manifest': manifest, 'catalog': survey.catalog, 'ledger': ledger, 'reviews': reviews,
-                         'intake': survey.intake['tables'], 'coordinates': survey.coordinates,
+                         'intake': survey.intake['tables'], 'receipts': survey.intake['receipts'],
+                         'impact': survey.intake['impact'], 'coordinates': survey.coordinates,
                          'pairing': survey.pairing, 'affine': survey.affine,
                          'refit': survey.refit, 'seams': survey.seams})
 

@@ -3,7 +3,7 @@ from app.modules.seams.geometry import (DISTANCE_EPSILON_M, MIN_COVERAGE, MIN_ST
 from app.modules.seams.witnesses import TrainingIndex, read_witnesses, split_by_edge
 
 
-def inspect_edge(edge, rows, quarantined, a, b, models, limit):
+def inspect_edge(edge, rows, quarantined, a, b, models, limit, gap_impacted=False):
     span = coverage(rows)
     result = {**edge, 'count': len(rows), 'coverage': span, 'limit_m': limit, 'stations': rows,
               'a_line': None, 'b_line': None, 'max_m': None, 'median_m': None}
@@ -17,6 +17,8 @@ def inspect_edge(edge, rows, quarantined, a, b, models, limit):
         reasons.append('EDGE_ORDER')
     if quarantined:
         reasons.append('EDGE_DIRTY')
+    if gap_impacted:
+        reasons.append('EDGE_GAP')
     # Twisted correspondence is not a valid physical gap measurement.
     if 'MODEL_UNAVAILABLE' not in reasons and 'EDGE_ORDER' not in reasons:
         left, right = (models[code]['model'] for code in (edge['a'], edge['b']))
@@ -35,11 +37,14 @@ def check_seams(intake, converted, pairing, refit, seam_limit_m):
     sheets = {sheet['code']: sheet for sheet in catalog['sheets']}
     by_edge, issues = split_by_edge(table, catalog)
     training = TrainingIndex(converted['pixels'], pairing['aliases'])
+    gap_edges = {code for gap in table.get('gaps', []) for code in gap.get('edges', [])}
+    held = set(pairing.get('gap_sheets', []))
     results = []
     for edge in catalog['edges']:
         code, a, b = edge['code'], sheets[edge['a']], sheets[edge['b']]
         rows, rejected = read_witnesses(by_edge[code], edge, a, b, training)
         issues[code].extend(rejected)
-        results.append(inspect_edge(edge, rows, issues[code], a, b, refit['sheets'], seam_limit_m))
+        impacted = code in gap_edges or edge['a'] in held or edge['b'] in held
+        results.append(inspect_edge(edge, rows, issues[code], a, b, refit['sheets'], seam_limit_m, impacted))
     quarantine = sorted((row for group in issues.values() for row in group), key=lambda row: row['source']['line'])
     return {'edges': results, 'quarantine': quarantine, 'input_count': table['records']}

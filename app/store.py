@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS signatures (
     version INTEGER NOT NULL CHECK (version = 1),
     PRIMARY KEY (run_id, sheet)
 );
+CREATE TABLE IF NOT EXISTS intakes (
+    intake_id TEXT PRIMARY KEY,
+    dataset TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    snapshot TEXT NOT NULL
+);
 '''
 
 
@@ -70,6 +76,43 @@ class Store:
             insert = connection.execute('INSERT INTO runs VALUES (?, ?, ?) ON CONFLICT(run_id) DO NOTHING',
                                         (run_id, manifest['created_at'], serialized))
             return self._read(connection, run_id), insert.rowcount == 0
+
+    @staticmethod
+    def _read_intake(connection, intake_id, required=True):
+        row = connection.execute('SELECT snapshot FROM intakes WHERE intake_id = ?', (intake_id,)).fetchone()
+        if not row:
+            if required:
+                raise RegisterError('INTAKE_NOT_FOUND', '未找到该收件批次', 404)
+            return None
+        return json.loads(row['snapshot'])
+
+    def get_intake(self, intake_id, required=True):
+        with self.connect() as connection:
+            return self._read_intake(connection, intake_id, required)
+
+    def insert_intake(self, snapshot):
+        manifest = snapshot['manifest']
+        intake_id = manifest['intake_id']
+        serialized = canonical_json(snapshot)
+        with self.connect('IMMEDIATE') as connection:
+            insert = connection.execute('INSERT INTO intakes VALUES (?, ?, ?, ?) ON CONFLICT(intake_id) DO NOTHING',
+                                        (intake_id, manifest['dataset'], manifest['created_at'], serialized))
+            return self._read_intake(connection, intake_id), insert.rowcount == 0
+
+    def list_intakes(self, dataset):
+        with self.connect() as connection:
+            rows = connection.execute('SELECT snapshot FROM intakes WHERE dataset = ?'
+                                      ' ORDER BY created_at DESC, intake_id', (dataset,)).fetchall()
+        batches = []
+        for row in rows:
+            snapshot = json.loads(row['snapshot'])
+            manifest = snapshot['manifest']
+            batches.append({'intake_id': manifest['intake_id'], 'dataset': manifest['dataset'],
+                            'created_at': manifest['created_at'], 'data_version': manifest['data_version'],
+                            'state': 'FRAGMENT' if any(table['gaps'] for table in snapshot['tables'].values())
+                                     else 'RECEIVED',
+                            'held': snapshot['impact']['held'], 'clear': snapshot['impact']['clear']})
+        return batches
 
     def sign(self, run_id, sheet, reviewer, expected_version):
         with self.connect('IMMEDIATE') as connection:
